@@ -10,9 +10,9 @@
 <style>
 :root{--bg:#f6f6f4;--card:#fff;--text:#171717;--muted:#777;--line:#e4e4e0;--good:#137a49;--goodbg:#eaf7ef;--bad:#b42318;--badbg:#fff0ee}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif}
-body{display:flex;justify-content:center}
-main{width:min(680px,100%);padding:max(10px,env(safe-area-inset-top)) 12px max(18px,env(safe-area-inset-bottom))}
+html,body{margin:0;width:100%;height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;overflow:hidden}
+body{display:flex;justify-content:center;min-height:100dvh}
+main{width:min(680px,100%);height:100dvh;padding:max(6px,env(safe-area-inset-top)) 10px max(6px,env(safe-area-inset-bottom));overflow:hidden}
 .card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:16px;box-shadow:0 8px 28px rgba(0,0,0,.04)}
 .top{display:flex;justify-content:flex-end;align-items:center;margin:0 2px 12px;min-height:20px}
 .count{font-size:12px;color:#999}
@@ -28,8 +28,8 @@ h1.xlong{font-size:clamp(14px,3.8vw,16.5px);line-height:1.15}
 .letter{flex:0 0 30px;height:30px;border-radius:9px;background:#f1f1ef;display:grid;place-items:center;font-weight:750}
 .answer.good .letter{background:#d2eedf}
 .answer.bad .letter{background:#f8d8d4}
-.choice-img{display:block;max-width:100%;max-height:155px;object-fit:contain;border-radius:8px;margin:3px 0}
-.illustration{display:block;width:100%;max-height:220px;object-fit:contain;border-radius:12px;margin:-2px 0 14px;background:#fafafa}
+.choice-img{display:block;max-width:100%;max-height:125px;object-fit:contain;border-radius:8px;margin:2px 0}
+.illustration{display:block;width:100%;max-height:150px;object-fit:contain;border-radius:12px;margin:-2px 0 9px;background:#fafafa}
 .altbox{font-size:13px;line-height:1.4;color:#666;background:#f7f7f5;border-radius:12px;padding:10px 12px;margin:-2px 0 14px}
 .repeat{margin-top:9px;width:100%;border:1px solid var(--line);background:#fafaf8;border-radius:12px;padding:9px 10px;font-size:13px;font-weight:650;color:#555}
 .repeat.on{background:#f0eee7;color:#262626;border-color:#d6d2c7}
@@ -100,6 +100,19 @@ function qClass(text){
 }
 function imgUrl(file){ return IMAGE_BASE+encodeURIComponent(file); }
 
+function fitToScreen(){
+  // Reset first so we always measure the natural card height.
+  app.style.zoom="1";
+  app.style.width="100%";
+  const available=Math.max(320, window.innerHeight-12);
+  const natural=app.offsetHeight;
+  if(natural>available){
+    const scale=Math.max(0.58, Math.min(1, available/natural));
+    // Increase layout width by the inverse amount so the scaled card still fills the phone width.
+    app.style.width=(100/scale)+"%";
+    app.style.zoom=String(scale);
+  }
+}
 function render(){
   clearTimeout(timer);
   locked=false;
@@ -123,6 +136,11 @@ function render(){
 
   document.querySelectorAll(".answer").forEach((el,i)=>el.addEventListener("click",()=>answer(i)));
   document.getElementById("repeatBtn").addEventListener("click",toggleRepeat);
+  requestAnimationFrame(fitToScreen);
+  document.querySelectorAll("img").forEach(img=>{
+    if(img.complete) requestAnimationFrame(fitToScreen);
+    else img.addEventListener("load",()=>requestAnimationFrame(fitToScreen),{once:true});
+  });
 }
 
 function choiceHtml(c,i){
@@ -182,6 +200,8 @@ async function init(){
     app.innerHTML='<div class="error">Sorular yüklenemedi.<br>İnternet bağlantını kontrol edip sayfayı yenile.</div>';
   }
 }
+window.addEventListener("resize",()=>requestAnimationFrame(fitToScreen));
+if(window.visualViewport) window.visualViewport.addEventListener("resize",()=>requestAnimationFrame(fitToScreen));
 init();
 </script>
 </body>
