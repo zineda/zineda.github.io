@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#f6f6f4">
+<title>Einbürgerungstest</title>
+<style>
+:root{--bg:#f6f6f4;--card:#fff;--text:#171717;--muted:#777;--line:#e4e4e0;--good:#137a49;--goodbg:#eaf7ef;--bad:#b42318;--badbg:#fff0ee}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif}
+body{display:flex;justify-content:center}
+main{width:min(680px,100%);padding:max(18px,env(safe-area-inset-top)) 16px max(34px,env(safe-area-inset-bottom))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:20px;box-shadow:0 8px 28px rgba(0,0,0,.04)}
+.top{display:flex;justify-content:flex-end;align-items:center;margin:0 2px 12px;min-height:20px}
+.count{font-size:12px;color:#999}
+h1{font-size:clamp(18px,5.1vw,23px);line-height:1.24;margin:0 0 16px;font-weight:750;letter-spacing:-.35px;overflow-wrap:anywhere}
+h1.long{font-size:clamp(17px,4.6vw,20px);line-height:1.22}
+h1.xlong{font-size:clamp(15.5px,4.15vw,18px);line-height:1.22}
+.answers{display:grid;gap:10px}
+.answer{width:100%;display:flex;align-items:center;gap:11px;text-align:left;border:1px solid var(--line);background:#fff;border-radius:15px;padding:12px 13px;font-size:15px;line-height:1.28;color:var(--text);overflow-wrap:anywhere;min-height:52px}
+.answer:not(:disabled):active{transform:scale(.995)}
+.answer:disabled{cursor:default;opacity:1}
+.answer.good{border-color:#91cdae;background:var(--goodbg);color:#0d6139}
+.answer.bad{border-color:#e7aaa4;background:var(--badbg);color:#8f1c14}
+.letter{flex:0 0 34px;height:34px;border-radius:10px;background:#f1f1ef;display:grid;place-items:center;font-weight:750}
+.answer.good .letter{background:#d2eedf}
+.answer.bad .letter{background:#f8d8d4}
+.choice-img{display:block;max-width:100%;max-height:155px;object-fit:contain;border-radius:8px;margin:3px 0}
+.illustration{display:block;width:100%;max-height:220px;object-fit:contain;border-radius:12px;margin:-2px 0 14px;background:#fafafa}
+.altbox{font-size:13px;line-height:1.4;color:#666;background:#f7f7f5;border-radius:12px;padding:10px 12px;margin:-2px 0 14px}
+.repeat{margin-top:14px;width:100%;border:1px solid var(--line);background:#fafaf8;border-radius:13px;padding:11px 12px;font-size:14px;font-weight:650;color:#555}
+.repeat.on{background:#f0eee7;color:#262626;border-color:#d6d2c7}
+.loading,.error{padding:42px 12px;text-align:center;color:#777;font-size:14px;line-height:1.5}
+@media (max-height:700px){
+ main{padding-top:10px}
+ .card{padding:16px}
+ .top{margin-bottom:8px}
+ h1{margin-bottom:12px}
+ .answers{gap:8px}
+ .answer{padding:10px 11px;min-height:46px;font-size:14px}
+ .letter{flex-basis:30px;height:30px}
+ .repeat{margin-top:10px;padding:9px 11px}
+ .illustration{max-height:150px}
+}
+</style>
+</head>
+<body>
+<main>
+  <div class="card" id="app"><div class="loading">Sorular yükleniyor…</div></div>
+</main>
+<script>
+const DATA_URL="https://raw.githubusercontent.com/himanshu-commits/living_in_deutschland/main/data/questions.json";
+const IMAGES_URL="https://raw.githubusercontent.com/himanshu-commits/living_in_deutschland/main/data/images.json";
+const IMAGE_BASE="https://raw.githubusercontent.com/himanshu-commits/living_in_deutschland/main/mobile/assets/images/";
+const KEY="einbuergern_repeat_v2";
+let questions=[], images={}, current=null, locked=false, timer=null;
+let repeat=new Set(JSON.parse(localStorage.getItem(KEY)||"[]"));
+const app=document.getElementById("app");
+
+function saveRepeat(){ localStorage.setItem(KEY,JSON.stringify([...repeat])); }
+function rand(n){ return Math.floor(Math.random()*n); }
+function shuffle(a){ const b=[...a]; for(let i=b.length-1;i>0;i--){const j=rand(i+1);[b[i],b[j]]=[b[j],b[i]];} return b; }
+
+function pickQuestion(){
+  if(!questions.length) return null;
+  let pool=[];
+  for(const q of questions){
+    const weight=repeat.has(q.id)?5:1;
+    for(let i=0;i<weight;i++) pool.push(q);
+  }
+  let q=pool[rand(pool.length)];
+  if(current && questions.length>1){
+    let tries=0;
+    while(q.id===current.q.id && tries++<12) q=pool[rand(pool.length)];
+  }
+  return q;
+}
+
+function qClass(text){
+  const n=text.length;
+  return n>155?"xlong":n>105?"long":"";
+}
+function imgUrl(file){ return IMAGE_BASE+encodeURIComponent(file); }
+
+function render(){
+  clearTimeout(timer);
+  locked=false;
+  const q=pickQuestion();
+  if(!q) return;
+  const meta=images[q.id]||null;
+  const choices=shuffle(q.options.map((text,i)=>({text,orig:i,img:(meta&&meta.kind==="options"&&meta.files)?meta.files[i]:null,alt:(meta&&meta.kind==="options"&&meta.alt)?meta.alt[i]:""})));
+  current={q,choices,meta};
+
+  let visual="";
+  if(meta && meta.kind!=="options" && meta.files && meta.files[0]){
+    if(meta.restricted){
+      visual='<div class="altbox">'+esc((meta.alt&&meta.alt[0])||"Görselli soru")+'</div>';
+    }else{
+      visual='<img class="illustration" src="'+imgUrl(meta.files[0])+'" alt="'+attr((meta.alt&&meta.alt[0])||"Soru görseli")+'">';
+    }
+  }
+
+  app.innerHTML=
+    '<div class="top"><span class="count">Tekrar '+repeat.size+'</span></div>'+
+    visual+
+    '<h1 class="'+qClass(q.question)+'">'+esc(q.question)+'</h1>'+
+    '<div class="answers">'+choices.map((c,i)=>choiceHtml(c,i)).join("")+'</div>'+
+    '<button class="repeat '+(repeat.has(q.id)?"on":"")+'" id="repeatBtn">'+(repeat.has(q.id)?"✓ Tekrar klasöründe":"＋ Tekrar klasörü")+'</button>';
+
+  document.querySelectorAll(".answer").forEach((el,i)=>el.addEventListener("click",()=>answer(i)));
+  document.getElementById("repeatBtn").addEventListener("click",toggleRepeat);
+}
+
+function choiceHtml(c,i){
+  const label=String.fromCharCode(65+i);
+  let media="";
+  if(c.img){
+    media='<div><img class="choice-img" src="'+imgUrl(c.img)+'" alt="'+attr(c.alt||c.text)+'"></div>';
+  }
+  return '<button class="answer" data-i="'+i+'"><span class="letter">'+label+'</span><span>'+media+'<span>'+esc(c.text)+'</span></span></button>';
+}
+
+function answer(i){
+  if(locked) return;
+  locked=true;
+  const {q,choices}=current;
+  const selected=choices[i];
+  const correct=selected.orig===q.answer;
+  const buttons=[...document.querySelectorAll(".answer")];
+  buttons.forEach((b,idx)=>{
+    b.disabled=true;
+    if(choices[idx].orig===q.answer) b.classList.add("good");
+  });
+  if(!correct){
+    buttons[i].classList.add("bad");
+    repeat.add(q.id);
+    saveRepeat();
+    updateRepeatButton();
+  }
+  timer=setTimeout(render,correct?850:2000);
+}
+
+function toggleRepeat(){
+  const id=current.q.id;
+  if(repeat.has(id)) repeat.delete(id); else repeat.add(id);
+  saveRepeat();
+  updateRepeatButton();
+}
+function updateRepeatButton(){
+  const b=document.getElementById("repeatBtn");
+  if(!b)return;
+  const on=repeat.has(current.q.id);
+  b.classList.toggle("on",on);
+  b.textContent=on?"✓ Tekrar klasöründe":"＋ Tekrar klasörü";
+  const c=document.querySelector(".count"); if(c)c.textContent="Tekrar "+repeat.size;
+}
+function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));}
+function attr(s){return esc(s).replace(/\n/g," ");}
+
+async function init(){
+  try{
+    const [qr,ir]=await Promise.all([fetch(DATA_URL),fetch(IMAGES_URL)]);
+    if(!qr.ok) throw new Error("Sorular yüklenemedi");
+    questions=(await qr.json()).filter(q=>q.verified===true && (q.scope==="ALL" || q.scope==="Berlin") && Number.isInteger(q.answer));
+    if(ir.ok) images=await ir.json();
+    render();
+  }catch(e){
+    app.innerHTML='<div class="error">Sorular yüklenemedi.<br>İnternet bağlantını kontrol edip sayfayı yenile.</div>';
+  }
+}
+init();
+</script>
+</body>
+</html>
